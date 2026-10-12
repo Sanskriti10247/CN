@@ -1,1092 +1,1191 @@
 1
-00:00:00,000 --> 00:00:00,855
+00:00:00,000 --> 00:00:00,886
 Session three.
 
 2
-00:00:00,855 --> 00:00:02,443
+00:00:01,166 --> 00:00:02,906
 One process, many clients.
 
 3
-00:00:02,443 --> 00:00:07,330
-The question for this session: how does one box hold ten thousand clients at the
+00:00:03,186 --> 00:00:08,233
+The question for this session: how does one box
+hold ten thousand clients at the same time?
 
 4
-00:00:07,330 --> 00:00:07,941
-same time?
-
-5
-00:00:08,866 --> 00:00:11,084
+00:00:09,166 --> 00:00:11,209
 There are three ways to serve many clients.
 
-6
-00:00:11,399 --> 00:00:12,409
+5
+00:00:11,533 --> 00:00:12,676
 Fork per request.
 
-7
-00:00:12,409 --> 00:00:15,023
+6
+00:00:12,956 --> 00:00:15,496
 The whole process is copied for each client.
 
-8
-00:00:15,023 --> 00:00:18,528
-Simple and isolated, but the most expensive per connection.
+7
+00:00:15,776 --> 00:00:19,447
+Simple and isolated, but the most
+expensive per connection.
 
-9
-00:00:18,866 --> 00:00:19,967
+8
+00:00:19,766 --> 00:00:20,863
 Thread per request.
 
-10
-00:00:19,967 --> 00:00:22,111
+9
+00:00:21,143 --> 00:00:23,388
 Cheaper than fork, and latency drops.
 
-11
-00:00:22,111 --> 00:00:25,646
-But every thread still costs a stack before any work is done.
+10
+00:00:23,668 --> 00:00:26,799
+But every thread still costs a stack
+before any work is done.
 
-12
-00:00:25,933 --> 00:00:27,488
+11
+00:00:27,133 --> 00:00:28,684
 One loop with many sockets.
 
+12
+00:00:28,964 --> 00:00:30,231
+With select or epoll,
+
 13
-00:00:27,488 --> 00:00:32,152
-With select or epoll, one thread watches every socket and wakes only for the ones
+00:00:30,231 --> 00:00:34,756
+one thread watches every socket and wakes
+only for the ones that are ready.
 
 14
-00:00:32,152 --> 00:00:33,016
-that are ready.
-
-15
-00:00:33,016 --> 00:00:34,629
+00:00:35,036 --> 00:00:36,454
 This is the one that scales.
 
-16
-00:00:34,933 --> 00:00:36,622
+15
+00:00:36,800 --> 00:00:38,416
 What actually ships is a mix.
 
+16
+00:00:38,696 --> 00:00:41,468
+Pre-fork or pre-thread a pool of workers,
+
 17
-00:00:36,622 --> 00:00:41,456
-Pre-fork or pre-thread a pool of workers, and let each worker run its own select or
+00:00:41,468 --> 00:00:45,051
+and let each worker run its own
+select or epoll loop.
 
 18
-00:00:41,456 --> 00:00:42,097
-epoll loop.
+00:00:45,331 --> 00:00:48,611
+Isolation from the processes,
+concurrency from the loop.
 
 19
-00:00:42,097 --> 00:00:45,359
-Isolation from the processes, concurrency from the loop.
+00:00:48,933 --> 00:00:53,413
+The cost of fork is a full process image
+per connection: page tables,
 
 20
-00:00:45,666 --> 00:00:50,391
-The cost of fork is a full process image per connection: page tables, file
+00:00:53,413 --> 00:00:58,672
+file descriptors and a scheduler entry
+duplicated, all paid while the user waits.
 
 21
-00:00:50,391 --> 00:00:55,244
-descriptors and a scheduler entry duplicated, all paid while the user waits.
-
-22
-00:00:56,133 --> 00:00:57,416
+00:00:59,599 --> 00:01:00,883
 Now the select server.
 
-23
-00:00:57,416 --> 00:00:58,408
+22
+00:01:01,163 --> 00:01:02,127
 Here is the loop.
 
+23
+00:01:02,466 --> 00:01:06,640
+Each iteration, clear the set, add the
+server socket, add every client,
+
 24
-00:00:58,733 --> 00:01:04,038
-Each iteration, clear the set, add the server socket, add every client, and track
+00:01:06,640 --> 00:01:08,581
+and track the highest descriptor.
 
 25
-00:01:04,038 --> 00:01:05,544
-the highest descriptor.
-
-26
-00:01:05,544 --> 00:01:08,032
+00:01:08,861 --> 00:01:11,311
 Then call select with max fd plus one.
 
-27
-00:01:08,333 --> 00:01:11,967
-If the server socket is marked ready, accept a new client.
+26
+00:01:11,633 --> 00:01:15,025
+If the server socket is marked
+ready, accept a new client.
 
-28
-00:01:12,600 --> 00:01:14,852
+27
+00:01:15,666 --> 00:01:17,622
 For every client marked ready, read.
 
-29
-00:01:15,533 --> 00:01:20,751
-If read returns zero or less, close the client, and delete it in constant time by
+28
+00:01:18,266 --> 00:01:21,261
+If read returns zero or less, close the client,
 
-30
-00:01:20,751 --> 00:01:22,490
+29
+00:01:21,261 --> 00:01:25,149
+and delete it in constant time by
 swapping in the last entry.
 
-31
-00:01:22,490 --> 00:01:23,520
+30
+00:01:25,429 --> 00:01:26,530
 Otherwise, echo.
 
-32
-00:01:24,200 --> 00:01:26,436
+31
+00:01:27,166 --> 00:01:29,213
 And note the last argument to select.
 
-33
-00:01:26,436 --> 00:01:27,646
+32
+00:01:29,493 --> 00:01:30,579
 That is the timeout.
 
-34
-00:01:27,646 --> 00:01:29,157
+33
+00:01:30,859 --> 00:01:32,252
 NULL means block forever.
 
-35
-00:01:30,400 --> 00:01:32,071
+34
+00:01:33,499 --> 00:01:34,893
 Why does select hit a wall?
 
+35
+00:01:35,233 --> 00:01:39,873
+The fd set is a fixed-width bitmap, one
+thousand twenty-four bits on glibc.
+
 36
-00:01:32,399 --> 00:01:36,609
-The fd set is a fixed-width bitmap, one thousand twenty-four bits on glibc.
+00:01:40,153 --> 00:01:44,551
+A descriptor numbered one thousand twenty-
+four simply cannot be represented.
 
 37
-00:01:36,609 --> 00:01:40,875
-A descriptor numbered one thousand twenty-four simply cannot be represented.
+00:01:45,499 --> 00:01:50,231
+The second problem: select is linear in the
+number of sockets, every single call.
 
 38
-00:01:41,799 --> 00:01:46,885
-The second problem: select is linear in the number of sockets, every single call.
+00:01:50,566 --> 00:01:55,432
+With select you rebuild the set each iteration,
+and the kernel scans every descriptor.
 
 39
-00:01:47,199 --> 00:01:51,550
-With select you rebuild the set each iteration, and the kernel scans every
+00:01:55,712 --> 00:02:00,295
+Ten thousand idle sockets cost exactly as
+much as ten thousand busy ones.
 
 40
-00:01:51,550 --> 00:01:52,196
-descriptor.
+00:02:00,633 --> 00:02:05,197
+With epoll, you register each
+descriptor once, using epoll_ctl.
 
 41
-00:01:52,196 --> 00:01:56,487
-Ten thousand idle sockets cost exactly as much as ten thousand busy ones.
-
-42
-00:01:56,799 --> 00:02:01,232
-With epoll, you register each descriptor once, using epoll_ctl.
-
-43
-00:02:01,232 --> 00:02:04,046
+00:02:05,477 --> 00:02:08,033
 Then epoll_wait returns only what fired.
 
-44
-00:02:04,046 --> 00:02:06,157
+42
+00:02:08,313 --> 00:02:10,003
 Idle connections cost nothing.
 
-45
-00:02:06,466 --> 00:02:09,350
+43
+00:02:10,333 --> 00:02:13,102
 Picture sixty sockets, and only three have data.
 
-46
-00:02:09,350 --> 00:02:10,732
+44
+00:02:13,382 --> 00:02:14,960
 select walks all sixty.
 
-47
-00:02:10,732 --> 00:02:12,654
+45
+00:02:15,240 --> 00:02:17,083
 epoll hands back just the three.
 
+46
+00:02:17,399 --> 00:02:20,198
+The number to remember is one
+thousand twenty-four.
+
+47
+00:02:20,478 --> 00:02:25,797
+It is FD_SETSIZE, it is your default
+ulimit, and it is the K in C ten K.
+
 48
-00:02:12,999 --> 00:02:16,514
-The number to remember is one thousand twenty-four.
-
-49
-00:02:16,514 --> 00:02:21,476
-It is FD_SETSIZE, it is your default ulimit, and it is the K in C ten K.
-
-50
-00:02:21,476 --> 00:02:22,992
+00:02:26,077 --> 00:02:27,407
 One wall, three names.
 
+49
+00:02:27,687 --> 00:02:35,021
+Other platforms have their own versions of epoll:
+kqueue on BSD and macOS, IOCP on Windows,
+
+50
+00:02:35,021 --> 00:02:37,358
+and io_uring on modern Linux.
+
 51
-00:02:22,992 --> 00:02:28,643
-Other platforms have their own versions of epoll: kqueue on BSD and macOS, IOCP on
-
-52
-00:02:28,643 --> 00:02:31,262
-Windows, and io_uring on modern Linux.
-
-53
-00:02:32,199 --> 00:02:34,545
+00:02:38,299 --> 00:02:40,515
 In production, you stack these ideas.
 
-54
-00:02:34,866 --> 00:02:39,742
-At startup, fork or spawn a pool of workers, often one per CPU core.
+52
+00:02:40,833 --> 00:02:45,657
+At startup, fork or spawn a pool of
+workers, often one per CPU core.
 
-55
-00:02:40,066 --> 00:02:42,702
+53
+00:02:45,999 --> 00:02:48,827
 Each worker runs its own select or epoll loop.
 
+54
+00:02:49,166 --> 00:02:52,813
+SO_REUSEPORT lets the kernel spread
+new connections across them.
+
+55
+00:02:53,133 --> 00:02:57,461
+You get crash isolation from the processes,
+and concurrency from the loops.
+
 56
-00:02:42,999 --> 00:02:46,448
-SO_REUSEPORT lets the kernel spread new connections across them.
+00:02:57,799 --> 00:03:03,434
+This is Apache's event MPM, nginx's master
+and workers, and the Go runtime,
 
 57
-00:02:46,733 --> 00:02:50,982
-You get crash isolation from the processes, and concurrency from the loops.
+00:03:03,434 --> 00:03:09,293
+which multiplexes goroutines onto OS threads
+with a scheduler on top of epoll.
 
 58
-00:02:51,266 --> 00:02:56,558
-This is Apache's event MPM, nginx's master and workers, and the Go runtime, which
+00:03:10,233 --> 00:03:13,275
+Timeouts are a contract, and the
+client has a half of it.
 
 59
-00:02:56,558 --> 00:03:01,262
-multiplexes goroutines onto OS threads with a scheduler on top of epoll.
-
-60
-00:03:02,199 --> 00:03:05,114
-Timeouts are a contract, and the client has a half of it.
-
-61
-00:03:05,399 --> 00:03:07,425
+00:03:13,599 --> 00:03:15,208
 select waits on three sets.
 
-62
-00:03:07,425 --> 00:03:09,675
+60
+00:03:15,488 --> 00:03:17,943
 Read fds: new content arrived.
 
-63
-00:03:09,675 --> 00:03:12,450
+61
+00:03:18,223 --> 00:03:20,889
 Write fds: the socket allows writing.
 
-64
-00:03:12,450 --> 00:03:17,776
-And except fds: sockets being connected, closed, or raising exceptions.
+62
+00:03:21,169 --> 00:03:26,006
+And except fds: sockets being connected,
+closed, or raising exceptions.
 
-65
-00:03:18,066 --> 00:03:20,026
+63
+00:03:26,333 --> 00:03:28,226
 The last argument is the timeout.
 
+64
+00:03:28,506 --> 00:03:32,344
+NULL means block forever, so one wedged
+client can stop the whole loop.
+
+65
+00:03:32,666 --> 00:03:36,814
+On the client side, always set a
+deadline, and then retry with backoff.
+
 66
-00:03:20,026 --> 00:03:24,243
-NULL means block forever, so one wedged client can stop the whole loop.
-
-67
-00:03:24,533 --> 00:03:28,582
-On the client side, always set a deadline, and then retry with backoff.
-
-68
-00:03:28,582 --> 00:03:31,034
+00:03:37,094 --> 00:03:39,241
 We will come back to that in session seven.
 
-69
-00:03:31,933 --> 00:03:34,500
+67
+00:03:40,166 --> 00:03:42,144
 Now, how does the server run your code?
 
+68
+00:03:42,424 --> 00:03:46,238
+The oldest answer is CGI, the
+Common Gateway Interface.
+
+69
+00:03:46,566 --> 00:03:50,626
+For every request, Apache creates a
+brand new CGI process,
+
 70
-00:03:34,500 --> 00:03:38,121
-The oldest answer is CGI, the Common Gateway Interface.
+00:03:50,626 --> 00:03:53,636
+with environment variables and three pipes.
 
 71
-00:03:38,466 --> 00:03:43,742
-For every request, Apache creates a brand new CGI process, with environment
+00:03:53,966 --> 00:03:56,764
+The request body goes to the
+program's standard in.
 
 72
-00:03:43,742 --> 00:03:45,571
-variables and three pipes.
+00:03:57,044 --> 00:04:00,059
+Whatever it prints on standard out
+becomes the response.
 
 73
-00:03:45,866 --> 00:03:48,792
-The request body goes to the program's standard in.
-
-74
-00:03:48,792 --> 00:03:52,004
-Whatever it prints on standard out becomes the response.
-
-75
-00:03:52,004 --> 00:03:54,643
+00:04:00,339 --> 00:04:02,937
 And standard error goes to Apache's error log.
 
+74
+00:04:03,266 --> 00:04:05,651
+In the real source, mod_cgi dot c,
+
+75
+00:04:05,651 --> 00:04:10,841
+the function run_cgi_child creates the
+child and attaches the three pipes,
+
 76
-00:03:54,933 --> 00:04:00,399
-In the real source, mod_cgi dot c, the function run_cgi_child creates the child and
+00:04:10,841 --> 00:04:15,891
+with a timeout on each, so a hung script
+cannot hold the worker forever.
 
 77
-00:04:00,399 --> 00:04:05,799
-attaches the three pipes, with a timeout on each, so a hung script cannot hold the
+00:04:16,233 --> 00:04:21,093
+The cost is that a whole program image is
+created, run once, and thrown away,
 
 78
-00:04:05,799 --> 00:04:06,787
-worker forever.
+00:04:21,093 --> 00:04:22,355
+on every single hit.
 
 79
-00:04:07,133 --> 00:04:11,892
-The cost is that a whole program image is created, run once, and thrown away, on
-
-80
-00:04:11,892 --> 00:04:12,903
-every single hit.
-
-81
-00:04:13,799 --> 00:04:16,176
+00:04:23,299 --> 00:04:25,105
 How does your program see the request?
 
-82
-00:04:16,176 --> 00:04:18,803
+80
+00:04:25,385 --> 00:04:28,478
 HTTP headers become environment variables.
 
-83
-00:04:19,866 --> 00:04:21,851
+81
+00:04:29,499 --> 00:04:31,401
 The method becomes REQUEST_METHOD.
 
-84
-00:04:22,199 --> 00:04:24,568
+82
+00:04:31,733 --> 00:04:33,734
 The query string becomes QUERY_STRING.
 
+83
+00:04:34,066 --> 00:04:39,254
+A header like User-Agent: curl becomes
+HTTP_USER_AGENT equals curl.
+
+84
+00:04:39,534 --> 00:04:43,737
+Upper-case, dashes become
+underscores, and an HTTP_prefix.
+
 85
-00:04:24,866 --> 00:04:29,826
-A header like User-Agent: curl becomes HTTP_USER_AGENT equals curl.
-
-86
-00:04:29,826 --> 00:04:34,119
-Upper-case, dashes become underscores, and an HTTP_prefix.
-
-87
-00:04:34,466 --> 00:04:37,473
+00:04:44,066 --> 00:04:46,487
 Plus GATEWAY_INTERFACE and SERVER_PROTOCOL.
 
-88
-00:04:37,473 --> 00:04:40,619
+86
+00:04:46,767 --> 00:04:50,342
 The code is ap_add_cgi_vars in util_script.c.
 
-89
-00:04:40,933 --> 00:04:43,141
+87
+00:04:50,666 --> 00:04:52,912
 The CGI program itself just prints.
 
-90
-00:04:43,141 --> 00:04:44,151
+88
+00:04:53,192 --> 00:04:54,150
 Read the method.
 
-91
-00:04:44,151 --> 00:04:45,855
+89
+00:04:54,430 --> 00:04:56,173
 For POST, read standard in.
 
-92
-00:04:45,855 --> 00:04:47,874
+90
+00:04:56,453 --> 00:04:58,208
 For GET, parse the query string.
 
+91
+00:04:58,488 --> 00:05:03,044
+Print a Content-Type header, then a blank line,
+which is the delimiter, then the body.
+
+92
+00:05:03,324 --> 00:05:08,292
+Any language that can read environment
+variables and print can serve HTTP.
+
 93
-00:04:47,874 --> 00:04:52,923
-Print a Content-Type header, then a blank line, which is the delimiter, then the
-
-94
-00:04:52,923 --> 00:04:53,238
-body.
-
-95
-00:04:53,238 --> 00:04:57,908
-Any language that can read environment variables and print can serve HTTP.
-
-96
-00:04:57,908 --> 00:05:00,937
+00:05:08,572 --> 00:05:10,938
 That is why the early web ran on Perl and shell.
 
-97
-00:05:01,866 --> 00:05:04,153
+94
+00:05:11,866 --> 00:05:13,955
 Two fixes for the cost of CGI.
 
+95
+00:05:14,300 --> 00:05:20,101
+One fix is to compile the language into the
+server, as mod PHP or mod Perl do.
+
+96
+00:05:20,381 --> 00:05:25,616
+No new process per request, but the app now shares
+an address space with the web server,
+
+97
+00:05:25,616 --> 00:05:27,520
+so one segfault takes both down.
+
 98
-00:05:04,466 --> 00:05:09,355
-One fix is to compile the language into the server, as mod PHP or mod Perl do.
-
-99
-00:05:09,355 --> 00:05:14,370
-No new process per request, but the app now shares an address space with the web
-
-100
-00:05:14,370 --> 00:05:16,877
-server, so one segfault takes both down.
-
-101
-00:05:17,199 --> 00:05:18,990
+00:05:27,866 --> 00:05:29,820
 The fix that won is FastCGI.
 
+99
+00:05:30,100 --> 00:05:33,863
+Keep a long-lived pool of processes and talk to it
+
+100
+00:05:33,863 --> 00:05:37,851
+over a Unix or TCP socket using
+a reduced vocabulary.
+
+101
+00:05:38,131 --> 00:05:42,482
+The setup cost is taken off the request
+path and paid once at startup,
+
 102
-00:05:18,990 --> 00:05:24,360
-Keep a long-lived pool of processes and talk to it over a Unix or TCP socket using a
+00:05:42,482 --> 00:05:44,346
+the same trick as pre-forking.
 
 103
-00:05:24,360 --> 00:05:25,574
-reduced vocabulary.
-
-104
-00:05:25,574 --> 00:05:30,625
-The setup cost is taken off the request path and paid once at startup, the same
-
-105
-00:05:30,625 --> 00:05:31,967
-trick as pre-forking.
-
-106
-00:05:32,866 --> 00:05:34,515
+00:05:45,266 --> 00:05:46,698
 Here is the architecture.
 
-107
-00:05:34,799 --> 00:05:37,389
+104
+00:05:47,033 --> 00:05:49,197
 Thousands of clients, many of them slow.
 
-108
-00:05:37,733 --> 00:05:44,005
-They talk to nginx or httpd, which is user-facing: it absorbs the slow connections,
+105
+00:05:49,533 --> 00:05:56,082
+They talk to nginx or httpd, which is user-
+facing: it absorbs the slow connections,
 
-109
-00:05:44,005 --> 00:05:45,895
+106
+00:05:56,082 --> 00:05:58,031
 handles TLS, and buffers.
 
-110
-00:05:46,199 --> 00:05:50,135
-Behind it, you define an upstream, speaking FastCGI.
+107
+00:05:58,366 --> 00:06:01,976
+Behind it, you define an
+upstream, speaking FastCGI.
 
-111
-00:05:50,466 --> 00:05:54,762
+108
+00:06:02,300 --> 00:06:06,331
 To php-fpm: a fixed pool of long-lived workers.
 
-112
-00:05:55,066 --> 00:05:58,650
+109
+00:06:06,666 --> 00:06:11,320
 FastCGI is a modified HTTP with less vocabulary.
 
-113
-00:05:58,650 --> 00:06:04,848
-It carries the same information, method, headers, query and body, but it is binary,
+110
+00:06:11,600 --> 00:06:16,843
+It carries the same information, method,
+headers, query and body, but it is binary,
 
-114
-00:06:04,848 --> 00:06:06,490
+111
+00:06:16,843 --> 00:06:18,232
 typed and multiplexed.
 
-115
-00:06:07,399 --> 00:06:09,454
+112
+00:06:19,166 --> 00:06:20,932
 Let us look at the actual records.
 
-116
-00:06:10,533 --> 00:06:13,586
+113
+00:06:21,966 --> 00:06:25,260
 A request begins with FCGI_BEGIN_REQUEST.
 
-117
-00:06:13,933 --> 00:06:20,720
-Then FCGI_PARAMS carries the variables: REQUEST_METHOD equals POST, SCRIPT_FILENAME,
+114
+00:06:25,600 --> 00:06:32,233
+Then FCGI_PARAMS carries the variables:
+REQUEST_METHOD equals POST, SCRIPT_FILENAME,
 
-118
-00:06:20,720 --> 00:06:23,952
+115
+00:06:32,233 --> 00:06:35,391
 QUERY_STRING, CONTENT_LENGTH, HTTP_HOST.
 
-119
-00:06:24,266 --> 00:06:27,273
-An empty PARAMS record means the params are finished.
+116
+00:06:35,733 --> 00:06:38,795
+An empty PARAMS record means the
+params are finished.
 
-120
-00:06:27,599 --> 00:06:33,203
-Then FCGI_STDIN carries the body: name equals alice and age equals twenty.
+117
+00:06:39,133 --> 00:06:44,928
+Then FCGI_STDIN carries the body: name
+equals alice and age equals twenty.
 
-121
-00:06:33,203 --> 00:06:34,415
+118
+00:06:45,208 --> 00:06:46,307
 Seventeen bytes.
 
-122
-00:06:34,733 --> 00:06:38,158
+119
+00:06:46,633 --> 00:06:50,169
 And an empty STDIN record means stdin is finished.
 
+120
+00:06:50,500 --> 00:06:56,233
+The response comes back as FCGI_STDOUT:
+headers, a blank line, and the body,
+
+121
+00:06:56,233 --> 00:06:57,817
+then an empty STDOUT.
+
+122
+00:06:58,166 --> 00:07:03,893
+STDERR goes to the log, in its own record type so
+debug output can never corrupt the page.
+
 123
-00:06:38,466 --> 00:06:44,287
-The response comes back as FCGI_STDOUT: headers, a blank line, and the body, then an
-
-124
-00:06:44,287 --> 00:06:45,188
-empty STDOUT.
-
-125
-00:06:45,533 --> 00:06:51,136
-STDERR goes to the log, in its own record type so debug output can never corrupt the
-
-126
-00:06:51,136 --> 00:06:51,469
-page.
-
-127
-00:06:51,469 --> 00:06:52,603
+00:07:04,173 --> 00:07:05,302
 Then END_REQUEST.
 
-128
-00:06:52,933 --> 00:06:54,119
+124
+00:07:05,633 --> 00:07:06,829
 The framing is both.
 
+125
+00:07:07,109 --> 00:07:10,554
+Every record header carries its
+content length, and an empty,
+
+126
+00:07:10,554 --> 00:07:14,394
+length zero record is the delimiter that
+says a stream has finished.
+
+127
+00:07:15,333 --> 00:07:18,561
+The same idea shows up in the
+Java world, as servlets.
+
+128
+00:07:18,900 --> 00:07:23,728
+Jetty and Tomcat are the web server, and the
+JVM is already running your code.
+
 129
-00:06:54,119 --> 00:06:59,040
-Every record header carries its content length, and an empty, length zero record is
-
-130
-00:06:59,040 --> 00:07:01,768
-the delimiter that says a stream has finished.
-
-131
-00:07:02,666 --> 00:07:06,021
-The same idea shows up in the Java world, as servlets.
-
-132
-00:07:06,333 --> 00:07:10,768
-Jetty and Tomcat are the web server, and the JVM is already running your code.
-
-133
-00:07:11,066 --> 00:07:13,185
+00:07:24,066 --> 00:07:26,008
 A thread pool is created at startup.
 
-134
-00:07:13,185 --> 00:07:14,479
+130
+00:07:26,288 --> 00:07:27,519
 That is pre-threading.
 
+131
+00:07:27,866 --> 00:07:31,578
+Isolation is by class loader and
+thread, not by process.
+
+132
+00:07:31,858 --> 00:07:35,759
+That is cheaper than fork, but a runaway
+servlet can hurt its neighbours.
+
+133
+00:07:36,100 --> 00:07:41,191
+CGI, FastCGI, servlets, and every modern
+framework answer one question:
+
+134
+00:07:41,191 --> 00:07:46,783
+how do we run user code for each request
+without creating the world each time?
+
 135
-00:07:14,799 --> 00:07:18,176
-Isolation is by class loader and thread, not by process.
-
-136
-00:07:18,176 --> 00:07:22,578
-That is cheaper than fork, but a runaway servlet can hurt its neighbours.
-
-137
-00:07:22,866 --> 00:07:28,357
-CGI, FastCGI, servlets, and every modern framework answer one question: how do we
-
-138
-00:07:28,357 --> 00:07:32,967
-run user code for each request without creating the world each time?
-
-139
-00:07:33,866 --> 00:07:35,713
+00:07:47,733 --> 00:07:49,236
 Is everything a web server?
 
-140
-00:07:35,713 --> 00:07:36,397
+136
+00:07:49,516 --> 00:07:50,325
 Not quite.
 
-141
-00:07:37,466 --> 00:07:42,725
-Plenty of things speak HTTP: a router's admin page, most Node apps.
+137
+00:07:51,366 --> 00:07:56,046
+Plenty of things speak HTTP: a router's
+admin page, most Node apps.
 
-142
-00:07:43,066 --> 00:07:45,469
+138
+00:07:56,366 --> 00:07:58,669
 Firestore and CouchDB over REST.
 
-143
-00:07:45,799 --> 00:07:52,198
-But Redis speaks RESP, MySQL has its own binary wire protocol, and MQTT brokers,
+139
+00:07:59,000 --> 00:08:05,770
+But Redis speaks RESP, MySQL has its own
+binary wire protocol, and MQTT brokers,
 
-144
-00:07:52,198 --> 00:07:55,877
+140
+00:08:05,770 --> 00:08:09,663
 messaging backends, and Kafka natively do too.
 
-145
-00:07:56,199 --> 00:07:57,412
+141
+00:08:11,200 --> 00:08:12,763
 HTTP is stateless.
 
-146
-00:07:57,412 --> 00:08:03,006
-Any box can answer any request, a load balancer can send the next request anywhere,
+142
+00:08:13,043 --> 00:08:18,230
+Any box can answer any request, a load balancer
+can send the next request anywhere,
 
-147
-00:08:03,006 --> 00:08:05,499
+143
+00:08:18,230 --> 00:08:20,543
 so horizontal scaling is nearly free.
 
-148
-00:08:05,799 --> 00:08:10,312
-A database wants to stay connected, because the TCP connect, handshake,
+144
+00:08:20,866 --> 00:08:25,599
+A database wants to stay connected,
+because the TCP connect, handshake,
 
-149
-00:08:10,312 --> 00:08:13,300
+145
+00:08:25,599 --> 00:08:28,732
 authentication and session setup are expensive.
 
-150
-00:08:13,599 --> 00:08:18,546
-So the question becomes: how many persistent connections can one box hold, not how
+146
+00:08:29,066 --> 00:08:33,544
+So the question becomes: how many
+persistent connections can one box hold,
 
-151
-00:08:18,546 --> 00:08:20,055
-many requests per second.
+147
+00:08:33,544 --> 00:08:35,542
+not how many requests per second.
 
-152
-00:08:20,999 --> 00:08:22,904
+148
+00:08:36,466 --> 00:08:38,164
 Every server hits four walls.
 
-153
-00:08:23,199 --> 00:08:24,569
+149
+00:08:38,500 --> 00:08:39,998
 First, file descriptors.
 
-154
-00:08:24,569 --> 00:08:29,132
-A connection is a descriptor, and the default limit is one thousand twenty-four.
+150
+00:08:40,278 --> 00:08:44,728
+A connection is a descriptor, and the default
+limit is one thousand twenty-four.
 
-155
-00:08:29,466 --> 00:08:30,312
+151
+00:08:45,066 --> 00:08:46,007
 Second, memory.
 
-156
-00:08:30,312 --> 00:08:34,203
-A stack per thread and a buffer per connection, paid before any work.
+152
+00:08:46,287 --> 00:08:50,017
+A stack per thread and a buffer per
+connection, paid before any work.
 
-157
-00:08:34,533 --> 00:08:36,062
+153
+00:08:50,366 --> 00:08:51,882
 Third, context switches.
 
-158
-00:08:36,062 --> 00:08:40,013
-Every read, write and system call crosses the kernel boundary.
+154
+00:08:52,162 --> 00:08:55,724
+Every read, write and system call
+crosses the kernel boundary.
 
-159
-00:08:40,333 --> 00:08:41,725
+155
+00:08:56,066 --> 00:08:57,184
 And fourth, the queue.
 
-160
-00:08:41,725 --> 00:08:44,445
+156
+00:08:57,464 --> 00:08:59,963
 Latency and throughput are not independent.
 
-161
-00:08:44,445 --> 00:08:45,964
+157
+00:09:00,243 --> 00:09:01,706
 Being slow costs memory.
 
-162
-00:08:46,866 --> 00:08:49,374
+158
+00:09:02,633 --> 00:09:05,009
 The history of this problem is two acronyms.
 
-163
-00:08:50,666 --> 00:08:55,880
-In nineteen ninety-nine, Dan Kegel asked: can one box hold ten thousand simultaneous
+159
+00:09:06,333 --> 00:09:09,083
+In nineteen ninety-nine, Dan Kegel asked:
 
-164
-00:08:55,880 --> 00:08:56,625
-connections?
+160
+00:09:09,083 --> 00:09:12,773
+can one box hold ten thousand
+simultaneous connections?
 
-165
-00:08:56,625 --> 00:08:58,549
+161
+00:09:13,053 --> 00:09:14,744
 At the time, the answer was no.
 
+162
+00:09:15,066 --> 00:09:19,308
+In twenty thirteen, Robert Graham argued
+the kernel itself is the problem,
+
+163
+00:09:19,308 --> 00:09:22,231
+and that you should bypass it
+to reach ten million.
+
+164
+00:09:22,566 --> 00:09:26,980
+Today, two to three million connections have
+been demonstrated on one server.
+
+165
+00:09:27,260 --> 00:09:30,434
+And the default ulimit is still
+one thousand twenty-four.
+
 166
-00:08:58,866 --> 00:09:03,299
-In twenty thirteen, Robert Graham argued the kernel itself is the problem, and that
-
-167
-00:09:03,299 --> 00:09:05,542
-you should bypass it to reach ten million.
-
-168
-00:09:05,866 --> 00:09:09,989
-Today, two to three million connections have been demonstrated on one server.
-
-169
-00:09:09,989 --> 00:09:13,041
-And the default ulimit is still one thousand twenty-four.
-
-170
-00:09:13,933 --> 00:09:15,602
+00:09:31,366 --> 00:09:32,945
 Memory is the second wall.
 
-171
-00:09:15,602 --> 00:09:18,043
+167
+00:09:33,225 --> 00:09:35,503
 Compare an OS thread with a goroutine.
 
-172
-00:09:18,333 --> 00:09:21,488
-An OS thread reserves an eight megabyte stack up front.
+168
+00:09:35,833 --> 00:09:39,141
+An OS thread reserves an eight
+megabyte stack up front.
 
-173
-00:09:21,488 --> 00:09:25,160
-Ten thousand threads is about eighty gigabytes of address space.
+169
+00:09:39,421 --> 00:09:43,068
+Ten thousand threads is about eighty
+gigabytes of address space.
 
-174
-00:09:25,466 --> 00:09:29,006
-A goroutine starts with a two kilobyte stack, grown on demand.
+170
+00:09:43,400 --> 00:09:47,110
+A goroutine starts with a two
+kilobyte stack, grown on demand.
 
-175
-00:09:29,006 --> 00:09:31,062
+171
+00:09:47,390 --> 00:09:49,222
 That is four thousand times smaller.
 
-176
-00:09:31,400 --> 00:09:36,070
-The Go runtime multiplexes goroutines onto a few OS threads with a netpoller built
+172
+00:09:49,566 --> 00:09:55,859
+The Go runtime multiplexes goroutines onto a few OS
+threads with a netpoller built on epoll.
 
-177
-00:09:36,070 --> 00:09:36,583
-on epoll.
+173
+00:09:56,139 --> 00:09:59,893
+You write simple blocking reads, and the
+runtime parks you on a poll.
 
-178
-00:09:36,583 --> 00:09:40,513
-You write simple blocking reads, and the runtime parks you on a poll.
-
-179
-00:09:41,400 --> 00:09:43,454
+174
+00:10:00,833 --> 00:10:02,936
 The third wall is the kernel boundary.
 
-180
-00:09:43,800 --> 00:09:47,108
-Each trip from user mode into the kernel and back saves state,
+175
+00:10:03,266 --> 00:10:06,706
+Each trip from user mode into the
+kernel and back saves state,
 
-181
-00:09:47,400 --> 00:09:48,816
+176
+00:10:07,033 --> 00:10:08,399
 switches page tables,
 
-182
-00:09:49,133 --> 00:09:50,561
+177
+00:10:08,733 --> 00:10:10,054
 validates arguments,
 
-183
-00:09:50,866 --> 00:09:51,911
+178
+00:10:10,400 --> 00:10:11,334
 copies data,
 
-184
-00:09:52,200 --> 00:09:53,279
+179
+00:10:11,666 --> 00:10:12,556
 and returns.
 
-185
-00:09:53,600 --> 00:09:58,540
-Each one costs hundreds of nanoseconds, and the Spectre and Meltdown mitigations
+180
+00:10:12,900 --> 00:10:15,177
+Each one costs hundreds of nanoseconds,
 
-186
-00:09:58,540 --> 00:09:59,404
-made it worse.
+181
+00:10:15,177 --> 00:10:18,390
+and the Spectre and Meltdown
+mitigations made it worse.
 
-187
-00:09:59,733 --> 00:10:00,913
+182
+00:10:18,733 --> 00:10:19,744
 Two responses.
 
-188
-00:10:00,913 --> 00:10:07,321
-Bypass the kernel entirely with user-space TCP: DPDK, netmap, mTCP, Seastar.
+183
+00:10:20,024 --> 00:10:26,927
+Bypass the kernel entirely with user-space
+TCP: DPDK, netmap, mTCP, Seastar.
 
-189
-00:10:07,321 --> 00:10:12,295
-You lose all your usual tools, but you get the raw packets.
+184
+00:10:27,207 --> 00:10:30,404
+You lose all your usual tools, but
+you get the raw packets.
 
-190
-00:10:12,600 --> 00:10:13,777
+185
+00:10:30,733 --> 00:10:31,918
 Or make fewer calls.
 
-191
-00:10:13,777 --> 00:10:18,543
-sendfile moves a file to a socket without a user-space copy, and io_uring submits
+186
+00:10:32,198 --> 00:10:36,220
+sendfile moves a file to a socket
+without a user-space copy,
 
-192
-00:10:18,543 --> 00:10:21,133
-batches of operations through a shared ring.
+187
+00:10:36,220 --> 00:10:40,577
+and io_uring submits batches of
+operations through a shared ring.
 
-193
-00:10:22,066 --> 00:10:24,111
+188
+00:10:41,500 --> 00:10:43,430
 Little's Law ties it all together.
 
-194
-00:10:24,111 --> 00:10:26,757
+189
+00:10:43,710 --> 00:10:46,493
 Concurrency equals throughput times latency.
 
-195
-00:10:27,066 --> 00:10:31,780
-Connections in flight equals requests per second, times seconds per request.
+190
+00:10:46,833 --> 00:10:51,371
+Connections in flight equals requests per
+second, times seconds per request.
 
-196
-00:10:32,066 --> 00:10:37,045
-At ten thousand requests per second, with a latency of one hundred milliseconds, you
+191
+00:10:51,700 --> 00:10:56,494
+At ten thousand requests per second, with a
+latency of one hundred milliseconds,
 
-197
-00:10:37,045 --> 00:10:38,823
-hold one thousand connections.
+192
+00:10:56,494 --> 00:10:58,532
+you hold one thousand connections.
 
-198
-00:10:39,133 --> 00:10:43,719
-Same traffic, but with a latency of one second, and you hold ten thousand.
+193
+00:10:58,866 --> 00:11:03,196
+Same traffic, but with a latency of one
+second, and you hold ten thousand.
 
-199
-00:10:44,066 --> 00:10:45,544
+194
+00:11:03,533 --> 00:11:05,200
 Slowness is a memory bug.
 
-200
-00:10:45,544 --> 00:10:50,511
-Only getting faster reduces what you hold, so take high-latency work off the request
+195
+00:11:05,480 --> 00:11:11,025
+Only getting faster reduces what you hold, so take
+high-latency work off the request path,
 
-201
-00:10:50,511 --> 00:10:52,344
-path, and do it asynchronously.
+196
+00:11:11,025 --> 00:11:12,566
+and do it asynchronously.
 
-202
-00:10:53,266 --> 00:10:55,391
+197
+00:11:13,499 --> 00:11:15,327
 Now the servers you actually use.
 
-203
-00:10:55,391 --> 00:10:56,228
+198
+00:11:15,607 --> 00:11:16,651
 Apache first.
 
-204
-00:10:56,228 --> 00:11:01,444
-Its concurrency model is called an MPM, a Multi-Processing Module, and it evolved
+199
+00:11:16,931 --> 00:11:21,318
+Its concurrency model is called an MPM,
+a Multi-Processing Module,
 
-205
-00:11:01,444 --> 00:11:02,345
-through three.
+200
+00:11:21,318 --> 00:11:23,245
+and it evolved through three.
 
-206
-00:11:02,666 --> 00:11:05,887
+201
+00:11:23,566 --> 00:11:26,679
 Prefork: a pool of processes, one connection each.
 
-207
-00:11:05,887 --> 00:11:10,526
-Bulletproof, works with non-thread-safe modules, and the most expensive.
+202
+00:11:26,959 --> 00:11:31,178
+Bulletproof, works with non-thread-safe
+modules, and the most expensive.
 
-208
-00:11:10,866 --> 00:11:13,266
+203
+00:11:31,499 --> 00:11:33,967
 Worker: processes each running many threads.
 
-209
-00:11:13,266 --> 00:11:17,302
-Cheaper, but a thread is pinned to a connection even while it sits idle on
+204
+00:11:34,247 --> 00:11:39,148
+Cheaper, but a thread is pinned to a connection
+even while it sits idle on keep-alive.
 
-210
-00:11:17,302 --> 00:11:17,902
-keep-alive.
+205
+00:11:39,466 --> 00:11:44,491
+Event: a listener thread per process parks
+idle keep-alive sockets on epoll,
 
-211
-00:11:18,200 --> 00:11:22,883
-Event: a listener thread per process parks idle keep-alive sockets on epoll, and
+206
+00:11:44,491 --> 00:11:47,466
+and hands workers only the sockets with work.
 
-212
-00:11:22,883 --> 00:11:25,284
-hands workers only the sockets with work.
+207
+00:11:47,746 --> 00:11:51,570
+It arrived around twenty twelve, and is
+the default on Unix today.
 
-213
-00:11:25,284 --> 00:11:29,148
-It arrived around twenty twelve, and is the default on Unix today.
-
-214
-00:11:30,066 --> 00:11:32,609
+208
+00:11:52,499 --> 00:11:54,818
 HAProxy arrived in two thousand one.
 
-215
-00:11:32,933 --> 00:11:34,794
+209
+00:11:55,166 --> 00:11:56,842
 It was largely select at first.
 
+210
+00:11:57,122 --> 00:12:02,617
+Epoll landed in Linux two point five point
+forty-four in late two thousand two,
+
+211
+00:12:02,617 --> 00:12:08,669
+and HAProxy became multi-threaded only in version
+one point eight, in twenty seventeen.
+
+212
+00:12:08,999 --> 00:12:12,488
+Its big idea was to make the load
+balancer a tier of its own,
+
+213
+00:12:12,488 --> 00:12:16,034
+sitting in front of the app servers
+and choosing between them.
+
+214
+00:12:16,366 --> 00:12:20,130
+A single event-driven process could
+saturate a network card,
+
+215
+00:12:20,130 --> 00:12:22,890
+and it absorbs connection churn by keeping a
+
 216
-00:11:34,794 --> 00:11:39,779
-Epoll landed in Linux two point five point forty-four in late two thousand two, and
+00:12:22,890 --> 00:12:25,901
+pool of persistent connections to the upstreams.
 
 217
-00:11:39,779 --> 00:11:44,763
-HAProxy became multi-threaded only in version one point eight, in twenty seventeen.
+00:12:26,833 --> 00:12:31,465
+Varnish, from two thousand six, was the
+first popular caching reverse proxy.
 
 218
-00:11:45,066 --> 00:11:49,447
-Its big idea was to make the load balancer a tier of its own, sitting in front of
-
-219
-00:11:49,447 --> 00:11:51,719
-the app servers and choosing between them.
-
-220
-00:11:52,066 --> 00:11:56,545
-A single event-driven process could saturate a network card, and it absorbs
-
-221
-00:11:56,545 --> 00:12:01,203
-connection churn by keeping a pool of persistent connections to the upstreams.
-
-222
-00:12:02,133 --> 00:12:06,696
-Varnish, from two thousand six, was the first popular caching reverse proxy.
-
-223
-00:12:07,000 --> 00:12:08,479
+00:12:31,799 --> 00:12:33,330
 Squid cached for the client.
 
+219
+00:12:33,610 --> 00:12:36,557
+It was a forward proxy near the
+users, on the way out.
+
+220
+00:12:36,837 --> 00:12:40,753
+Varnish put the same mechanism in front
+of the origin, on the way in.
+
+221
+00:12:41,099 --> 00:12:44,146
+Internally, an acceptor thread
+per listening point,
+
+222
+00:12:44,146 --> 00:12:46,655
+and a worker thread per active connection,
+
+223
+00:12:46,655 --> 00:12:51,612
+with pools that default to a minimum of one
+hundred and a maximum of five thousand.
+
 224
-00:12:08,479 --> 00:12:11,331
-It was a forward proxy near the users, on the way out.
+00:12:51,933 --> 00:12:57,697
+Idle descriptors are handed to a waiter, using
+epoll on Linux and kqueue on BSD.
 
 225
-00:12:11,331 --> 00:12:14,976
-Varnish put the same mechanism in front of the origin, on the way in.
-
-226
-00:12:15,266 --> 00:12:19,788
-Internally, an acceptor thread per listening point, and a worker thread per active
-
-227
-00:12:19,788 --> 00:12:24,200
-connection, with pools that default to a minimum of one hundred and a maximum of
-
-228
-00:12:24,200 --> 00:12:24,972
-five thousand.
-
-229
-00:12:25,266 --> 00:12:30,228
-Idle descriptors are handed to a waiter, using epoll on Linux and kqueue on BSD.
-
-230
-00:12:30,228 --> 00:12:32,522
+00:12:57,977 --> 00:13:00,043
 Threads for work, a loop for waiting.
 
+226
+00:13:00,366 --> 00:13:05,656
+Fastly's edge is built on Varnish, and VCL,
+the Varnish Configuration Language,
+
+227
+00:13:05,656 --> 00:13:09,808
+is how you configure that two
+thousand six program even today.
+
+228
+00:13:10,733 --> 00:13:14,977
+And nginx, from two thousand four,
+built on epoll and sendfile.
+
+229
+00:13:15,299 --> 00:13:19,051
+With read and write, bytes go from disk,
+to the kernel, to your buffer,
+
+230
+00:13:19,051 --> 00:13:21,376
+back into the kernel, and out to the socket.
+
 231
-00:12:32,866 --> 00:12:38,112
-Fastly's edge is built on Varnish, and VCL, the Varnish Configuration Language, is
+00:13:21,656 --> 00:13:25,578
+With sendfile, the kernel moves them
+straight from the file to the socket.
 
 232
-00:12:38,112 --> 00:12:41,887
-how you configure that two thousand six program even today.
-
-233
-00:12:42,800 --> 00:12:47,107
-And nginx, from two thousand four, built on epoll and sendfile.
-
-234
-00:12:47,400 --> 00:12:51,888
-With read and write, bytes go from disk, to the kernel, to your buffer, back into
-
-235
-00:12:51,888 --> 00:12:53,772
-the kernel, and out to the socket.
-
-236
-00:12:53,772 --> 00:12:57,872
-With sendfile, the kernel moves them straight from the file to the socket.
-
-237
-00:12:57,872 --> 00:12:59,312
+00:13:25,858 --> 00:13:27,199
 You never touch the bytes.
 
-238
-00:12:59,312 --> 00:13:00,310
+233
+00:13:27,479 --> 00:13:28,750
 That is zero copy.
 
-239
-00:13:00,600 --> 00:13:05,369
-nginx runs one master process and one single-threaded worker per CPU core.
+234
+00:13:29,099 --> 00:13:34,621
+nginx runs one master process and one
+single-threaded worker per CPU core.
 
-240
-00:13:05,369 --> 00:13:09,365
-Each worker runs one epoll loop over thousands of connections.
+235
+00:13:34,901 --> 00:13:38,790
+Each worker runs one epoll loop over
+thousands of connections.
 
-241
-00:13:09,666 --> 00:13:14,535
-It started as a reverse proxy, and was then abused for caching, load balancing, TLS
+236
+00:13:39,133 --> 00:13:44,472
+It started as a reverse proxy, and was then
+abused for caching, load balancing,
 
-242
-00:13:14,535 --> 00:13:16,295
-termination and rate limiting.
+237
+00:13:44,472 --> 00:13:46,770
+TLS termination and rate limiting.
 
-243
-00:13:16,295 --> 00:13:18,583
+238
+00:13:47,050 --> 00:13:49,092
 It became the default shape of an edge.
 
-244
-00:13:18,866 --> 00:13:23,122
-Since version one point seven point eleven, it has a thread pool for disk reads,
+239
+00:13:49,433 --> 00:13:54,207
+Since version one point seven point eleven, it
+has a thread pool for disk reads,
 
-245
-00:13:23,122 --> 00:13:27,538
-because a page fault on a cache miss would otherwise stall every connection on that
+240
+00:13:54,207 --> 00:13:59,637
+because a page fault on a cache miss would
+otherwise stall every connection on that worker.
 
-246
-00:13:27,538 --> 00:13:27,910
-worker.
-
-247
-00:13:28,800 --> 00:13:29,786
+241
+00:14:00,566 --> 00:14:01,611
 Side by side.
 
-248
-00:13:30,866 --> 00:13:34,844
-Apache, nineteen ninety-five: prefork, worker, event.
+242
+00:14:02,633 --> 00:14:06,167
+Apache, nineteen ninety-five:
+prefork, worker, event.
 
-249
-00:13:34,844 --> 00:13:38,746
-It popularised modules and CGI to run anyone's code.
+243
+00:14:06,447 --> 00:14:10,287
+It popularised modules and CGI
+to run anyone's code.
 
-250
-00:13:38,746 --> 00:13:40,247
+244
+00:14:10,567 --> 00:14:11,816
 Akamai started here.
 
-251
-00:13:40,533 --> 00:13:43,787
+245
+00:14:12,133 --> 00:14:15,437
 HAProxy, two thousand one: select then epoll.
 
-252
-00:13:43,787 --> 00:13:46,245
+246
+00:14:15,717 --> 00:14:17,648
 The load balancer as its own tier.
 
-253
-00:13:46,533 --> 00:13:51,600
-Varnish, two thousand six: a thread per active connection with an epoll waiter.
+247
+00:14:17,966 --> 00:14:22,931
+Varnish, two thousand six: a thread per
+active connection with an epoll waiter.
 
-254
-00:13:51,600 --> 00:13:54,486
+248
+00:14:23,211 --> 00:14:25,957
 The caching reverse proxy, now Fastly's edge.
 
-255
-00:13:54,800 --> 00:13:58,979
-nginx, two thousand four: a master plus one worker per core.
+249
+00:14:26,299 --> 00:14:30,309
+nginx, two thousand four: a master
+plus one worker per core.
 
-256
-00:13:58,979 --> 00:14:01,487
+250
+00:14:30,589 --> 00:14:32,847
 Sendfile, and the answer to C ten K.
 
-257
-00:14:01,800 --> 00:14:06,792
-All four ended up in the same place: an event loop, and a small pool of workers.
+251
+00:14:33,166 --> 00:14:37,835
+All four ended up in the same place: an event
+loop, and a small pool of workers.
 
-258
-00:14:07,733 --> 00:14:09,799
+252
+00:14:38,766 --> 00:14:40,685
 Four ideas to keep from this session.
 
-259
-00:14:10,133 --> 00:14:10,482
+253
+00:14:41,033 --> 00:14:41,535
 One.
 
-260
-00:14:10,482 --> 00:14:12,139
+254
+00:14:41,815 --> 00:14:42,988
 Amortise the setup.
 
-261
-00:14:12,139 --> 00:14:16,240
+255
+00:14:43,268 --> 00:14:46,838
 Pre-fork, pre-thread, FastCGI, pools, servlets.
 
-262
-00:14:16,533 --> 00:14:16,791
+256
+00:14:47,166 --> 00:14:47,702
 Two.
 
-263
-00:14:16,791 --> 00:14:18,788
+257
+00:14:47,982 --> 00:14:49,609
 Nothing is free per connection.
 
-264
-00:14:18,788 --> 00:14:23,557
-A descriptor, a stack, a buffer and a scheduler entry, times ten thousand.
+258
+00:14:49,889 --> 00:14:54,348
+A descriptor, a stack, a buffer and a
+scheduler entry, times ten thousand.
 
-265
-00:14:23,866 --> 00:14:24,239
+259
+00:14:54,666 --> 00:14:55,252
 Three.
 
-266
-00:14:24,239 --> 00:14:26,539
+260
+00:14:55,532 --> 00:14:57,496
 Framing is still length or delimiter.
 
-267
-00:14:26,539 --> 00:14:30,205
-FastCGI uses a length in each record, plus an empty record.
+261
+00:14:57,776 --> 00:15:01,842
+FastCGI uses a length in each
+record, plus an empty record.
 
-268
-00:14:30,533 --> 00:14:30,848
+262
+00:15:02,166 --> 00:15:02,719
 Four.
 
-269
-00:14:30,848 --> 00:14:33,621
+263
+00:15:02,999 --> 00:15:05,783
 Concurrency equals throughput times latency.
 
-270
-00:14:33,621 --> 00:14:36,268
+264
+00:15:06,063 --> 00:15:08,573
 Only getting faster reduces what you hold.
 
-271
-00:14:37,200 --> 00:14:40,671
-Here is what the quiz is most likely to ask from session three.
+265
+00:15:09,499 --> 00:15:12,932
+Here is what the quiz is most likely
+to ask from session three.
 
-272
-00:14:59,200 --> 00:15:00,669
+266
+00:15:31,466 --> 00:15:32,667
 That is session three.
 
-273
-00:15:00,669 --> 00:15:04,610
-Next up, session four: nginx and the code that explains it.
+267
+00:15:32,947 --> 00:15:36,859
+Next up, session four: nginx and
+the code that explains it.
 

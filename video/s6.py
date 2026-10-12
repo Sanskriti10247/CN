@@ -38,7 +38,7 @@ class S6(VScene):
     # ------------------------------------------------------------------
     def ch_physics(self):
         self.new_slide("Physics: the one number you can't optimise", "First, why the edge exists. Physics. The speed of light is the one number you cannot optimise.", C_BLUE)
-        a = VGroup(T("Light in vacuum", 26, C_YELLOW), T("299,792 km/s", 34, WHITE)).arrange(DOWN, buff=0.15).move_to(LEFT * 3.5 + UP * 1.5)
+        a = VGroup(T("Light in vacuum", 26, C_YELLOW), T("299,792 km/s", 34, WHITE)).arrange(DOWN, buff=0.15).move_to(LEFT * 4.7 + UP * 1.5)
         b = VGroup(T("Light in fibre", 26, C_ORANGE), T("~204,218 km/s  (about 2/3 c; index 1.468)", 28, WHITE), T("= 4.90 ms per 1000 km, one way", 28, C_GREEN)).arrange(DOWN, buff=0.15).move_to(RIGHT * 3.0 + UP * 1.5)
         with self.vo("Light in a vacuum travels at two ninety-nine thousand seven ninety-two kilometres a second. In fibre, about two thirds of that: two hundred four thousand kilometres a second, a refractive index of one point four six eight. That is four point nine milliseconds per thousand kilometres, one way."):
             self.play(FadeIn(a), FadeIn(b), run_time=1.5)
@@ -87,7 +87,7 @@ class S6(VScene):
         fl, _ = self.flow(["you", "edge PoP\ncache · TLS · WAF", "shield /\ntiered cache", "your origin"], [C_BLUE, C_ORANGE, C_PURPLE, C_GREEN], y=1.0, w=2.8, h=1.3, size=22, gap=0.5,
                           narrations=["You,", "ten milliseconds from an edge point of presence, with cache, TLS and a WAF,", "which talks to a shield, or tiered cache,", "which talks to your origin, over one long, controlled leg."])
         rows = [("Reverse proxy", "nginx (Session 4)"), ("Caching", "proxy_cache (Session 4)"), ("Connection pool", "upstream keepalive (Session 3)"), ("Anycast", "one IP in every city (Session 2 addressing)")]
-        tbl = self.table([["Nothing new...", "...it's Sessions 2-4, rented"]] + [[a, b] for a, b in rows], [4.4, 6.4], size=23, y=-1.4, row_h=0.6)
+        tbl = self.table([["Nothing new...", "...it's Sessions 2-4, rented"]] + [[a, b] for a, b in rows], [4.4, 6.4], size=23, y=-1.8, row_h=0.6)
         self.reveal_rows(tbl, ["Nothing here is new. The reverse proxy is nginx from session four.", "The caching is proxy_cache.", "The pool is upstream keepalive, from session three.", "And anycast puts one IP address in every city. Squid, by the way, did reverse proxy caching in nineteen ninety-six."])
         with self.vo("What geography adds: cheap handshakes near the user. The CDN owns both ends of the long leg, so it controls transport and pooling. A shield layer means many edges share one origin fetch. And one anycast address announced from every city."):
             pass
@@ -242,6 +242,7 @@ class S6(VScene):
                    T(wrap("Fix: drop the unkeyed header at the edge, add it to the key, or Vary on it.", 34), 20, C_GREEN, maxw=6.0, line_spacing=0.9)).arrange(DOWN, buff=0.25).move_to(LEFT * 3.4 + UP * 0.3)
         R = VGroup(T("Cache DECEPTION", 28, C_ORANGE), T("Omer Gil, Black Hat 2017", 20, C_GREY), T(wrap("Trick the victim into loading /account/settings/fake.css. The edge sees '.css' and caches the victim's PRIVATE page. The attacker fetches the same URL from the cache.", 34), 20, WHITE, maxw=6.0, line_spacing=0.9),
                    T(wrap("Fix: don't cache by extension alone; honour the origin's content-type and no-store.", 34), 20, C_GREEN, maxw=6.0, line_spacing=0.9)).arrange(DOWN, buff=0.25).move_to(RIGHT * 3.4 + UP * 0.3)
+        self._place_clear(VGroup(L, R))
         with self.vo("Cache poisoning, by James Kettle, twenty eighteen. The origin reflects an unkeyed header, like X-Forwarded-Host, into the page. One attacker request caches a script tag pointing at the attacker's domain, and every visitor gets it, as a hit. "
                      "The fix: drop the unkeyed header at the edge, add it to the key, or Vary on it."):
             self.play(FadeIn(L), run_time=2)
@@ -254,8 +255,8 @@ class S6(VScene):
 
     def ch_bbr(self):
         self.new_slide("BBR on the CDN", "Moving bytes faster. BBR, again, now at CDN scale. Bottleneck Bandwidth and Round-trip propagation time, by Cardwell and colleagues at Google, twenty sixteen.", C_PURPLE)
-        L = VGroup(T("CUBIC (loss-based)", 26, C_RED), T("fill the pipe until a drop, then halve", 22), T("on long lossy CDN paths it", 22), T("mistakes distance for congestion", 22, C_RED)).arrange(DOWN, buff=0.18).move_to(LEFT * 3.5 + UP * 1.3)
-        R = VGroup(T("BBR", 26, C_GREEN), T("measures bottleneck bandwidth + min RTT", 22), T("and paces to that", 22), T("loss is not a congestion signal", 22, C_GREEN)).arrange(DOWN, buff=0.18).move_to(RIGHT * 3.5 + UP * 1.3)
+        L = VGroup(T("CUBIC (loss-based)", 26, C_RED), T("fill the pipe until a drop, then halve", 22), T("on long lossy CDN paths it", 22), T("mistakes distance for congestion", 22, C_RED)).arrange(DOWN, buff=0.18).move_to(LEFT * 3.5 + UP * 1.7)
+        R = VGroup(T("BBR", 26, C_GREEN), T("measures bottleneck bandwidth + min RTT", 22), T("and paces to that", 22), T("loss is not a congestion signal", 22, C_GREEN)).arrange(DOWN, buff=0.18).move_to(RIGHT * 3.5 + UP * 1.7)
         with self.vo("Loss-based CUBIC fills the pipe until a drop, then halves. On long, lossy CDN paths it mistakes distance for congestion."):
             self.play(FadeIn(L))
         with self.vo("BBR measures the bottleneck bandwidth and the minimum round trip time, and paces to that. Loss is not a congestion signal."):
@@ -265,7 +266,7 @@ class S6(VScene):
                           ["Amazon CloudFront, 2019", "edge -> viewer", "up to +22%; some US mobile +100%"],
                           ["Akamai, Nov 2019", "media", "BBR on >80% of end-user connections"],
                           ["Web census 2023", "top-10k sites", "BBR the most-deployed CCA; CUBIC ~7%"]],
-                         [4.0, 2.6, 6.0], size=20, y=-1.5, row_h=0.62)
+                         [3.4, 2.4, 7.0], size=19, y=-1.4, row_h=0.5)
         self.reveal_rows(tbl, ["Google's B4 and YouTube, in twenty sixteen: two to twenty-five times CUBIC's throughput, and median round trip time down fifty-three percent.", "Amazon CloudFront in twenty nineteen: up to twenty-two percent, and some US mobile networks doubled.",
                                "Akamai, November twenty nineteen: BBR on more than eighty percent of end-user connections.", "And a twenty twenty-three web census: BBR is now the most deployed congestion control algorithm among the top ten thousand sites. CUBIC is about seven percent."])
         t = T("Only the SENDER changes: no new protocol, client or router. A CDN owns the sender on both legs, so it can just switch it on.", 21, C_YELLOW, maxw=12.4).to_edge(DOWN, buff=0.3)
@@ -360,6 +361,8 @@ class S6(VScene):
                ("TLS time Mumbai vs Virginia (curl -w '%{time_appconnect}' to DynamoDB regional endpoints)", "Compare TLS time from Mumbai and from Virginia, using curl with time_appconnect against regional endpoints."),
                ("cloudflared tunnel --url http://localhost:8000 -> https://<rand>.trycloudflare.com. Quick Tunnel: no account, no DNS; 200 in-flight limit, no SSE, testing only. The echo server shows CF-Connecting-IP, CF-Ray, CDN-Loop - and few TCP connections: the pool", "And a Quick Tunnel: cloudflared tunnel dash dash url, pointing at localhost. You get a trycloudflare dot com address. No account, no DNS. Limits: two hundred in-flight, no server-sent events, testing only. The echo server prints CF-Connecting-IP, CF-Ray and CDN-Loop, and shows very few TCP connections. That is the pool.")]
         self.bullets(pts, size=21, gap=0.4, shift=UP * 1.0)
+        self.wait(0.6)
+        self.new_slide("Cloudflare dashboard, free plan", None, C_ORANGE)
         tbl = self.table([["Dashboard action (free plan)", "Point", "Limit"],
                           ["Orange vs grey cloud", "origin IP vanishes behind anycast", "-"],
                           ["Cache an HTML page", "MISS > HIT > purge > MISS; Age climbs", "10 rules"],
@@ -367,7 +370,7 @@ class S6(VScene):
                           ["Rate-limit /api/*", "~20 pass, then 429; per colo", "1 rule, 10 s only"],
                           ["Transform Rules", "strip X-Powered-By", "unlimited"],
                           ["Deploy a Worker", "code at the edge", "100k req/day"]],
-                         [4.3, 5.2, 3.2], size=19, y=-1.9, row_h=0.5)
+                         [4.3, 5.2, 3.2], size=22, y=0.2, row_h=0.7)
         with self.vo("On the dashboard, free plan: the orange cloud versus the grey cloud, which hides your origin IP behind anycast. Cache an HTML page, and watch miss, hit, purge, miss, with the Age header climbing. A WAF custom rule. A rate limit that passes about twenty requests and then returns four twenty-nine, per colo. "
                      "A transform rule to strip X-Powered-By. And a Worker, deployed with wrangler, up to a hundred thousand requests a day."):
             self.reveal_rows(tbl, with_lines=False)

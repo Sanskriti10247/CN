@@ -74,7 +74,7 @@ class S1(VScene):
         ]
         hl = {"socket": C_BLUE, "bind": C_BLUE, "listen": C_BLUE, "accept": C_ORANGE, "read": C_GREEN,
               "write": C_GREEN, "close": C_RED}
-        code = self.code_block(lines, size=22, hl=hl, pos=DOWN * 0.3)
+        code = self.code_block(lines, size=19, hl=hl, pos=DOWN * 0.15)
         with self.vo("The program creates a socket, fills in an address structure, binds, and listens. "
                      "Then it loops forever: accept a client, read once, write the same bytes back, close."):
             self.play(FadeIn(code[0]), Write(code[1], run_time=5))

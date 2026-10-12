@@ -2,26 +2,6 @@ from common import *
 
 
 class S5(VScene):
-    # ---- helper: horizontal bar chart -----------------------------------------
-    def bars(self, items, maxv, y0=1.6, gap=0.85, left=-3.0, width=7.0, label_w=3.4, size=22, unit="", narrs=None):
-        grp = VGroup()
-        for i, (name, val, col) in enumerate(items):
-            y = y0 - i * gap
-            lab = T(name, size, WHITE, maxw=label_w).move_to([left - label_w / 2 - 0.2, y, 0])
-            lab.align_to([left - label_w - 0.1, 0, 0], LEFT)
-            w = max(0.05, width * val / maxv)
-            r = Rectangle(width=w, height=0.5, color=col, fill_opacity=0.7, stroke_width=2).move_to([left + w / 2, y, 0])
-            v = T(f"{val:g}{unit}", size, col, maxw=2.5).next_to(r, RIGHT, buff=0.15)
-            row = VGroup(lab, r, v)
-            nar = narrs[i] if narrs else None
-            if nar:
-                with self.vo(nar):
-                    self.play(FadeIn(lab), GrowFromEdge(r, LEFT), FadeIn(v), run_time=0.9)
-            else:
-                self.play(FadeIn(lab), GrowFromEdge(r, LEFT), FadeIn(v), run_time=0.7)
-            grp.add(row)
-        return grp
-
     def construct(self):
         self.session_title(
             5, "HTTP, 1996 to Now", "HTTP/1.0 → 1.1 → 2 → QUIC and HTTP/3",
@@ -398,7 +378,9 @@ class S5(VScene):
                ("2. Dynamic table - from index 62. Anything sent before on this connection gets an index: a 300-byte cookie costs 300 B once, then 1-2 B forever", "Two. The dynamic table, from index sixty-two. Anything sent before on this connection gets an index. A three hundred byte cookie costs three hundred bytes once, then one or two bytes forever."),
                ("3. Huffman (Appendix B) - a fixed canonical code from real header text ('e' = 5 bits, 'X' = 8), used per string only when it shrinks", "Three. Huffman coding, from Appendix B: a fixed canonical code built from real header text. The letter e takes five bits, and X takes eight. It is used per string, only when it shrinks it.")]
         self.bullets(pts, size=21, gap=0.4, shift=UP * 0.8)
-        self.bars([("HTTP/1.1 text", 174, C_RED), ("HPACK, first time", 79, C_ORANGE), ("HPACK, second time", 6, C_GREEN)], 180, y0=-1.5, left=-2.6, width=6.5, label_w=4.0, size=22, unit=" B",
+        self.wait(0.8)
+        self.new_slide("HPACK: the same header set, three times", None, C_GREEN)
+        self.bars([("HTTP/1.1 text", 174, C_RED), ("HPACK, first time", 79, C_ORANGE), ("HPACK, second time", 6, C_GREEN)], 180, y0=1.3, gap=1.1, left=-2.6, width=6.5, label_w=4.0, size=22, unit=" B",
                   narrs=["The same header set: one hundred seventy-four bytes as HTTP one point one text.", "Seventy-nine bytes the first time with HPACK. Fifty-five percent saved.", "And six bytes the second time. Six one-byte indices. Ninety-seven percent saved."])
         t = T("The dynamic table is per connection -> HTTP/2 wants ONE connection; domain sharding is now harmful.", 22, C_YELLOW, maxw=12.4).to_edge(DOWN, buff=0.35)
         with self.vo("The dynamic table is per connection. So HTTP two wants one connection, and domain sharding is now harmful."):

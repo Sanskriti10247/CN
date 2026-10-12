@@ -1,0 +1,72 @@
+1
+00:00:00,000 --> 00:00:01,351
+So what is a CDN?
+
+2
+00:00:01,631 --> 00:00:05,564
+Session four's reverse proxy, rented in
+three hundred plus cities.
+
+3
+00:00:05,914 --> 00:00:06,408
+You,
+
+4
+00:00:06,758 --> 00:00:11,569
+ten milliseconds from an edge point of
+presence, with cache, TLS and a WAF,
+
+5
+00:00:11,919 --> 00:00:14,034
+which talks to a shield, or tiered cache,
+
+6
+00:00:14,384 --> 00:00:17,848
+which talks to your origin, over
+one long, controlled leg.
+
+7
+00:00:18,898 --> 00:00:20,081
+Nothing here is new.
+
+8
+00:00:20,361 --> 00:00:23,421
+The reverse proxy is nginx from session four.
+
+9
+00:00:23,771 --> 00:00:25,352
+The caching is proxy_cache.
+
+10
+00:00:25,702 --> 00:00:28,503
+The pool is upstream keepalive,
+from session three.
+
+11
+00:00:28,852 --> 00:00:31,863
+And anycast puts one IP address in every city.
+
+12
+00:00:32,143 --> 00:00:36,229
+Squid, by the way, did reverse proxy
+caching in nineteen ninety-six.
+
+13
+00:00:36,579 --> 00:00:39,568
+What geography adds: cheap
+handshakes near the user.
+
+14
+00:00:39,848 --> 00:00:44,720
+The CDN owns both ends of the long leg, so
+it controls transport and pooling.
+
+15
+00:00:45,000 --> 00:00:48,427
+A shield layer means many edges
+share one origin fetch.
+
+16
+00:00:48,707 --> 00:00:51,426
+And one anycast address announced from every city.
+

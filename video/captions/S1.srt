@@ -1,0 +1,1165 @@
+1
+00:00:00,000 --> 00:00:00,845
+Session one.
+
+2
+00:00:01,125 --> 00:00:03,342
+Network programming, from the socket up.
+
+3
+00:00:03,622 --> 00:00:05,138
+By the end of this session,
+
+4
+00:00:05,138 --> 00:00:07,722
+you will see that every web framework you have
+
+5
+00:00:07,722 --> 00:00:10,755
+ever used is a thin wrapper
+around seven system calls.
+
+6
+00:00:11,699 --> 00:00:13,572
+Here is the core claim of the session.
+
+7
+00:00:13,852 --> 00:00:17,307
+A TCP server is exactly seven system calls.
+
+8
+00:00:17,633 --> 00:00:18,657
+First, socket.
+
+9
+00:00:18,937 --> 00:00:20,583
+Ask the kernel for an endpoint.
+
+10
+00:00:20,863 --> 00:00:25,390
+AF_INET means IPv4, and SOCK_STREAM
+means TCP, a byte stream.
+
+11
+00:00:25,733 --> 00:00:26,339
+Bind.
+
+12
+00:00:26,619 --> 00:00:30,219
+Attach that socket to a port number, so
+clients know where to find you.
+
+13
+00:00:30,566 --> 00:00:31,184
+Listen.
+
+14
+00:00:31,464 --> 00:00:34,588
+Tell the kernel to start accepting
+connections on your behalf.
+
+15
+00:00:34,933 --> 00:00:35,643
+Accept.
+
+16
+00:00:35,923 --> 00:00:41,245
+Block until a client connection arrives, and hand
+it to you as a brand new file descriptor.
+
+17
+00:00:41,566 --> 00:00:43,098
+Read the bytes the client sent.
+
+18
+00:00:43,433 --> 00:00:44,515
+Write bytes back.
+
+19
+00:00:44,833 --> 00:00:46,190
+And close, when you are done.
+
+20
+00:00:46,533 --> 00:00:50,730
+Bind, listen and accept are the three
+calls that only a server makes.
+
+21
+00:00:51,010 --> 00:00:56,393
+Express, Flask and Go's net/http are all
+wrappers around this exact sequence.
+
+22
+00:00:56,733 --> 00:00:57,876
+A client is shorter.
+
+23
+00:00:58,156 --> 00:01:00,479
+Socket, connect, read and write, close.
+
+24
+00:01:00,759 --> 00:01:02,066
+Notice what is missing.
+
+25
+00:01:02,346 --> 00:01:05,335
+A client never calls bind, and never calls listen.
+
+26
+00:01:05,666 --> 00:01:08,906
+Our course port for the demos is
+two thousand twenty-six.
+
+27
+00:01:09,833 --> 00:01:11,189
+Let us look at the whole thing.
+
+28
+00:01:11,469 --> 00:01:12,656
+About twenty lines.
+
+29
+00:01:12,999 --> 00:01:17,509
+The program creates a socket, fills in an
+address structure, binds, and listens.
+
+30
+00:01:17,789 --> 00:01:22,508
+Then it loops forever: accept a client, read
+once, write the same bytes back, close.
+
+31
+00:01:22,833 --> 00:01:26,707
+INADDR_ANY means listen on every
+network interface of the machine.
+
+32
+00:01:27,333 --> 00:01:32,273
+And htons converts the port number from the
+host's byte order to network byte order.
+
+33
+00:01:32,553 --> 00:01:33,813
+We will come back to that.
+
+34
+00:01:34,433 --> 00:01:38,384
+The number passed to listen is the backlog,
+the depth of the accept queue.
+
+35
+00:01:38,664 --> 00:01:39,687
+Also coming up.
+
+36
+00:01:40,333 --> 00:01:41,367
+One more point.
+
+37
+00:01:41,647 --> 00:01:43,596
+One read is not a conversation.
+
+38
+00:01:43,876 --> 00:01:45,763
+To make this server persistent,
+
+39
+00:01:45,763 --> 00:01:50,571
+wrap read and write in a loop that continues
+while read returns more than zero.
+
+40
+00:01:50,851 --> 00:01:54,541
+When read returns zero, that is end
+of file: the client closed.
+
+41
+00:01:55,466 --> 00:01:56,463
+Next, ports.
+
+42
+00:01:56,743 --> 00:02:01,351
+The rule is simple: everything below one
+thousand twenty-four belongs to root.
+
+43
+00:02:02,399 --> 00:02:06,360
+Below one thousand twenty-four are the
+privileged, well-known ports.
+
+44
+00:02:06,640 --> 00:02:07,959
+Only root can bind them.
+
+45
+00:02:08,239 --> 00:02:18,825
+Port 80 is HTTP, 443 is HTTPS, 25 is
+SMTP, 21 is FTP, 110 is POP.
+
+46
+00:02:19,166 --> 00:02:20,858
+Above that, anyone can bind.
+
+47
+00:02:21,138 --> 00:02:25,411
+Three thousand for node, eighty-eighty
+as an alternate HTTP port,
+
+48
+00:02:25,411 --> 00:02:29,684
+sixty-three seventy-nine for Redis,
+and twenty twenty-six for us.
+
+49
+00:02:30,033 --> 00:02:31,171
+Why does this matter?
+
+50
+00:02:31,451 --> 00:02:34,681
+If your server binds port eighty, it runs as root,
+
+51
+00:02:34,681 --> 00:02:38,427
+so a bug in your request parser
+becomes a root compromise.
+
+52
+00:02:38,707 --> 00:02:40,432
+Real deployments flip it around.
+
+53
+00:02:40,712 --> 00:02:43,789
+The app binds eighty-eighty as
+an unprivileged user,
+
+54
+00:02:43,789 --> 00:02:48,640
+and a small front proxy that does almost
+nothing owns eighty and four forty-three.
+
+55
+00:02:49,566 --> 00:02:52,496
+A good way to learn what each
+call does is to skip one.
+
+56
+00:02:52,776 --> 00:02:54,331
+There are two classic mistakes.
+
+57
+00:02:55,366 --> 00:02:56,113
+Case one.
+
+58
+00:02:56,393 --> 00:02:57,675
+You never called bind.
+
+59
+00:02:57,955 --> 00:02:59,326
+Nobody owns the port.
+
+60
+00:02:59,606 --> 00:03:00,850
+The client sends a SYN.
+
+61
+00:03:01,199 --> 00:03:03,919
+The kernel answers immediately with an RST.
+
+62
+00:03:04,199 --> 00:03:06,116
+The client sees connection refused.
+
+63
+00:03:06,396 --> 00:03:07,432
+Fast, and loud.
+
+64
+00:03:09,666 --> 00:03:10,466
+Case two.
+
+65
+00:03:10,746 --> 00:03:13,294
+You bind and listen, but never call accept.
+
+66
+00:03:13,574 --> 00:03:14,819
+The client sends a SYN.
+
+67
+00:03:15,166 --> 00:03:18,157
+The kernel completes the three-way
+handshake on your behalf.
+
+68
+00:03:18,499 --> 00:03:21,627
+The connection is established, and
+sits in the accept queue.
+
+69
+00:03:21,966 --> 00:03:23,839
+But your process never picks it up.
+
+70
+00:03:24,119 --> 00:03:27,284
+The client simply hangs until TCP times out.
+
+71
+00:03:27,564 --> 00:03:32,649
+This looks exactly like an overloaded server,
+which is why it is such a confusing bug.
+
+72
+00:03:33,566 --> 00:03:35,547
+Let us look closer at the accept queue.
+
+73
+00:03:35,866 --> 00:03:40,389
+The kernel keeps completed connections in a
+queue until your code calls accept.
+
+74
+00:03:40,733 --> 00:03:45,390
+By the time accept returns, the connection has
+already been established for a while.
+
+75
+00:03:45,733 --> 00:03:47,040
+Three facts to remember.
+
+76
+00:03:47,320 --> 00:03:49,972
+What happens when the queue is
+full is not portable.
+
+77
+00:03:50,252 --> 00:03:52,315
+Some systems refuse, others hang.
+
+78
+00:03:52,633 --> 00:03:55,763
+Linux caps the number at net dot
+core dot somaxconn,
+
+79
+00:03:55,763 --> 00:03:59,314
+so the number in your code may not
+be the number in effect.
+
+80
+00:03:59,633 --> 00:04:02,186
+And the backlog is the depth of the accept queue.
+
+81
+00:04:02,466 --> 00:04:05,486
+It is not a limit on how many
+connections you can have.
+
+82
+00:04:06,433 --> 00:04:07,118
+Signals.
+
+83
+00:04:07,398 --> 00:04:10,828
+Most are harmless trivia, but one of
+them will kill your server.
+
+84
+00:04:11,866 --> 00:04:13,375
+SIGINT is signal two.
+
+85
+00:04:13,655 --> 00:04:15,282
+It is what Ctrl C sends.
+
+86
+00:04:15,599 --> 00:04:17,986
+SIGKILL is nine, and it cannot be caught.
+
+87
+00:04:18,333 --> 00:04:19,720
+SIGPIPE is thirteen.
+
+88
+00:04:20,000 --> 00:04:22,930
+If you write to a socket the
+peer has already closed,
+
+89
+00:04:22,930 --> 00:04:25,584
+the default action is to terminate your process.
+
+90
+00:04:25,864 --> 00:04:27,379
+No error, no exception.
+
+91
+00:04:27,659 --> 00:04:29,135
+The process is just gone.
+
+92
+00:04:29,466 --> 00:04:31,701
+SIGTERM is fifteen, the polite kill.
+
+93
+00:04:33,033 --> 00:04:38,429
+In the demo, the client forces a reset using
+SO_LINGER with on, and a timeout of zero.
+
+94
+00:04:38,709 --> 00:04:43,634
+That sends an RST instead of a FIN, tears
+the connection down immediately,
+
+95
+00:04:43,634 --> 00:04:46,429
+discards unsent data, and skips TIME_WAIT.
+
+96
+00:04:46,766 --> 00:04:51,480
+The real fix in servers is to ignore
+SIGPIPE, or pass MSG_NOSIGNAL,
+
+97
+00:04:51,480 --> 00:04:54,084
+and handle the E PIPE error yourself.
+
+98
+00:04:55,033 --> 00:04:56,014
+Now the client.
+
+99
+00:04:56,294 --> 00:05:00,119
+It is shorter than the server, and the
+interesting part is what is missing.
+
+100
+00:05:00,466 --> 00:05:01,616
+Look up the host name.
+
+101
+00:05:01,896 --> 00:05:02,955
+Create a socket.
+
+102
+00:05:03,235 --> 00:05:04,733
+Fill in the address and port.
+
+103
+00:05:05,013 --> 00:05:07,322
+Connect, which triggers the three-way handshake.
+
+104
+00:05:07,602 --> 00:05:08,185
+Write.
+
+105
+00:05:08,465 --> 00:05:09,102
+Close.
+
+106
+00:05:09,433 --> 00:05:10,289
+No bind.
+
+107
+00:05:10,569 --> 00:05:11,375
+No listen.
+
+108
+00:05:11,700 --> 00:05:13,571
+So where does the client's port come from?
+
+109
+00:05:13,851 --> 00:05:18,097
+The kernel picks a random high port at
+connect time, from the ephemeral range.
+
+110
+00:05:18,377 --> 00:05:21,238
+On Linux that is typically
+thirty-two thousand seven
+
+111
+00:05:21,238 --> 00:05:24,704
+hundred sixty-eight to sixty thousand
+nine hundred ninety-nine.
+
+112
+00:05:24,984 --> 00:05:28,832
+The server must bind a known port, because
+clients need a fixed address.
+
+113
+00:05:29,112 --> 00:05:30,376
+But the client does not.
+
+114
+00:05:30,656 --> 00:05:36,243
+Ephemeral ports are finite, and TIME_WAIT holds
+each for about sixty seconds after close,
+
+115
+00:05:36,243 --> 00:05:38,440
+so busy clients really can run out.
+
+116
+00:05:39,366 --> 00:05:41,751
+A quick but famous detail: byte order.
+
+117
+00:05:42,100 --> 00:05:45,380
+Port twenty twenty-six is hex zero seven EA.
+
+118
+00:05:45,700 --> 00:05:51,481
+A little-endian machine, like your laptop, stores
+the low byte first: EA, then zero seven.
+
+119
+00:05:51,761 --> 00:05:55,909
+But the network standard is big-
+endian: zero seven, then EA.
+
+120
+00:05:56,233 --> 00:05:59,819
+That is what htons does: host to
+network, short, two bytes.
+
+121
+00:06:00,099 --> 00:06:05,321
+htonl is the four-byte version, and ntohs
+and ntohl convert on the way back.
+
+122
+00:06:06,266 --> 00:06:11,083
+One innocent function call in the client
+hides an entire protocol: DNS.
+
+123
+00:06:11,433 --> 00:06:15,192
+Step one, the file/etc/hosts,
+before any network traffic.
+
+124
+00:06:15,472 --> 00:06:20,904
+That is why editing it overrides everything, and
+why a stale entry is so hard to debug.
+
+125
+00:06:21,233 --> 00:06:27,062
+Step two, a UDP query to your resolver, which
+is listed in etc/resolv dot conf.
+
+126
+00:06:27,400 --> 00:06:29,569
+The resolver recurses on your behalf.
+
+127
+00:06:29,849 --> 00:06:31,373
+First it asks a root server.
+
+128
+00:06:31,700 --> 00:06:34,997
+Then the top-level domain server, for example.com.
+
+129
+00:06:35,333 --> 00:06:39,094
+And finally the authoritative server
+that actually knows the answer.
+
+130
+00:06:39,433 --> 00:06:43,046
+The answer is cached for its TTL,
+so it is fast when warm.
+
+131
+00:06:43,366 --> 00:06:44,458
+But the call blocks.
+
+132
+00:06:44,738 --> 00:06:48,398
+A cold lookup can take seconds, and you
+do not control the timeout.
+
+133
+00:06:48,733 --> 00:06:50,729
+In real code, use getaddrinfo.
+
+134
+00:06:51,009 --> 00:06:54,188
+gethostbyname is IPv4 only and not thread safe.
+
+135
+00:06:55,133 --> 00:06:58,111
+Before writing any code, you
+already own three clients.
+
+136
+00:06:59,133 --> 00:06:59,765
+telnet.
+
+137
+00:07:00,045 --> 00:07:03,821
+If a protocol is text, your keyboard
+is an implementation of it.
+
+138
+00:07:04,101 --> 00:07:09,691
+Type GET/HTTP one point one, a Host header,
+and a blank line, and Google answers.
+
+139
+00:07:10,033 --> 00:07:12,818
+openssl s_client, for anything encrypted,
+
+140
+00:07:12,818 --> 00:07:16,282
+because telnet is useless once
+TLS gets in the way.
+
+141
+00:07:16,600 --> 00:07:18,243
+And netcat for everything else.
+
+142
+00:07:18,523 --> 00:07:21,855
+nc localhost 2026 is a client.
+
+143
+00:07:22,135 --> 00:07:24,772
+nc -l 9000 is a tiny server.
+
+144
+00:07:25,100 --> 00:07:28,341
+The response is a three hundred
+one, moved permanently,
+
+145
+00:07:28,341 --> 00:07:32,289
+cacheable for two million five hundred
+ninety-two thousand seconds.
+
+146
+00:07:32,569 --> 00:07:33,746
+That is thirty days.
+
+147
+00:07:34,026 --> 00:07:39,100
+CRLF line endings, and the blank line that
+ends the headers are mandatory.
+
+148
+00:07:40,633 --> 00:07:42,530
+And where are we on the OSI stack?
+
+149
+00:07:42,810 --> 00:07:45,212
+We have been writing layer seven this whole time.
+
+150
+00:07:45,492 --> 00:07:47,764
+Ports belong to layer four, transport.
+
+151
+00:07:48,044 --> 00:07:50,076
+IP addresses belong to layer three.
+
+152
+00:07:51,000 --> 00:07:53,367
+Our server handles one client at a time.
+
+153
+00:07:53,647 --> 00:07:54,908
+How do we handle many?
+
+154
+00:07:55,233 --> 00:07:56,067
+Two answers.
+
+155
+00:07:56,347 --> 00:07:58,549
+One process per connection, with fork.
+
+156
+00:07:58,829 --> 00:08:03,883
+Dead simple, the operating system schedules it,
+and a crash is contained to one child.
+
+157
+00:08:04,163 --> 00:08:07,401
+Fine for hundreds of clients,
+hopeless at ten thousand.
+
+158
+00:08:07,733 --> 00:08:11,448
+Or one process with many sockets,
+using select or epoll.
+
+159
+00:08:11,728 --> 00:08:15,237
+Ask the kernel which sockets are
+ready, and handle only those.
+
+160
+00:08:15,517 --> 00:08:18,256
+No context switching, no per-client memory.
+
+161
+00:08:18,536 --> 00:08:21,676
+Harder to write, and one slow
+handler blocks everything.
+
+162
+00:08:21,956 --> 00:08:23,877
+This is what nginx and Node do.
+
+163
+00:08:26,100 --> 00:08:27,445
+Fork returns twice.
+
+164
+00:08:27,725 --> 00:08:29,277
+Zero means you are the child.
+
+165
+00:08:29,557 --> 00:08:31,389
+Handle this client, then exit.
+
+166
+00:08:31,733 --> 00:08:36,871
+A positive value means you are the parent, and
+the value is the child's process ID.
+
+167
+00:08:37,151 --> 00:08:40,668
+Close your copy of the file
+descriptor and go back to accept.
+
+168
+00:08:41,000 --> 00:08:42,902
+Minus one means the fork failed.
+
+169
+00:08:43,182 --> 00:08:44,804
+Out of processes or memory.
+
+170
+00:08:45,084 --> 00:08:46,485
+Almost nobody checks.
+
+171
+00:08:48,033 --> 00:08:49,460
+select versus epoll.
+
+172
+00:08:49,740 --> 00:08:51,659
+Select is portable but O of n.
+
+173
+00:08:51,939 --> 00:08:55,631
+You rebuild the set every call, the
+kernel walks all of them,
+
+174
+00:08:55,631 --> 00:08:59,627
+and FD_SETSIZE caps you near one
+thousand twenty-four descriptors.
+
+175
+00:08:59,907 --> 00:09:02,380
+epoll is Linux only and O of ready.
+
+176
+00:09:02,660 --> 00:09:07,586
+You register interest once, and the kernel
+returns only the descriptors that changed.
+
+177
+00:09:07,866 --> 00:09:11,798
+BSD and macOS have kqueue, Windows has IOCP.
+
+178
+00:09:12,078 --> 00:09:14,057
+nginx and Node are built on this.
+
+179
+00:09:15,600 --> 00:09:16,689
+Some limits to know.
+
+180
+00:09:16,969 --> 00:09:19,836
+Six was Chrome's old cap on connections per host.
+
+181
+00:09:20,116 --> 00:09:22,002
+Requests seven to ten simply queue.
+
+182
+00:09:22,333 --> 00:09:26,093
+ulimit -n is the hard ceiling on
+open file descriptors.
+
+183
+00:09:26,373 --> 00:09:29,661
+Sockets count, and it is often one
+thousand twenty-four.
+
+184
+00:09:30,000 --> 00:09:34,057
+A connection pool opens
+connections once and reuses them,
+
+185
+00:09:34,057 --> 00:09:37,759
+skipping the TCP and TLS
+handshakes after the first.
+
+186
+00:09:38,100 --> 00:09:41,350
+And SO_REUSEADDR is the option
+you will actually use.
+
+187
+00:09:41,630 --> 00:09:45,552
+Without it, restarting your server fails
+with address already in use,
+
+188
+00:09:45,552 --> 00:09:47,769
+while the old socket sits in TIME_WAIT.
+
+189
+00:09:48,100 --> 00:09:52,443
+Promiscuous mode lets a network card see
+traffic that is not addressed to it.
+
+190
+00:09:52,723 --> 00:09:56,263
+That is how sniffers work, and why
+plaintext protocols died.
+
+191
+00:09:58,300 --> 00:10:02,341
+Finally, to see the actual bytes,
+use tcpdump or Wireshark.
+
+192
+00:10:02,621 --> 00:10:06,936
+Capture to a file, then read it back as
+ASCII, or as hex and ASCII.
+
+193
+00:10:07,866 --> 00:10:08,698
+TLS.
+
+194
+00:10:08,978 --> 00:10:13,678
+The key sentence is: SSL secures TCP, not HTTP.
+
+195
+00:10:14,000 --> 00:10:20,771
+TLS sits underneath the application protocol, so
+the same machinery protects HTTP, mail,
+
+196
+00:10:20,771 --> 00:10:23,234
+databases, anything on a socket.
+
+197
+00:10:23,566 --> 00:10:24,474
+How it works.
+
+198
+00:10:24,754 --> 00:10:28,341
+First, asymmetric cryptography
+agrees a shared secret.
+
+199
+00:10:28,621 --> 00:10:33,390
+Then symmetric cryptography encrypts the data,
+because it is dramatically faster.
+
+200
+00:10:33,733 --> 00:10:36,642
+Second, a certificate binds a key to an identity.
+
+201
+00:10:36,922 --> 00:10:38,976
+The CA chain is why you believe it.
+
+202
+00:10:39,256 --> 00:10:42,385
+And certificates expire, which is
+the three AM outage.
+
+203
+00:10:42,733 --> 00:10:46,643
+Third, certificate pinning removes the
+CA from the trust equation.
+
+204
+00:10:46,923 --> 00:10:50,027
+Common in mobile apps, trust
+this exact certificate.
+
+205
+00:10:50,966 --> 00:10:52,370
+Now protocol design.
+
+206
+00:10:52,650 --> 00:10:55,101
+The single most important decision is framing.
+
+207
+00:10:55,433 --> 00:10:58,439
+TCP gives you a byte stream, not messages.
+
+208
+00:10:58,719 --> 00:11:03,548
+When you write two messages, the receiver may read
+them glued together, or split in half.
+
+209
+00:11:03,828 --> 00:11:06,436
+So how does the receiver know
+where one message ends?
+
+210
+00:11:07,466 --> 00:11:08,307
+Option one.
+
+211
+00:11:08,587 --> 00:11:09,450
+Fixed length.
+
+212
+00:11:09,730 --> 00:11:12,024
+Every message is exactly N bytes.
+
+213
+00:11:12,304 --> 00:11:16,187
+Trivial to parse, but you pay in
+padding, and you can never change N.
+
+214
+00:11:16,533 --> 00:11:17,388
+Option two.
+
+215
+00:11:17,668 --> 00:11:18,370
+Delimited.
+
+216
+00:11:18,650 --> 00:11:22,221
+Read until a sentinel, like the
+blank line in HTTP.
+
+217
+00:11:22,501 --> 00:11:26,768
+Simple, until the delimiter shows up in your
+data, and then you need escaping.
+
+218
+00:11:27,100 --> 00:11:27,986
+Option three.
+
+219
+00:11:28,266 --> 00:11:29,309
+Length prefix.
+
+220
+00:11:29,589 --> 00:11:32,222
+Send the size, then the bytes,
+like Content-Length.
+
+221
+00:11:32,502 --> 00:11:34,100
+Robust and binary safe.
+
+222
+00:11:34,380 --> 00:11:36,646
+This is what most modern protocols do.
+
+223
+00:11:37,566 --> 00:11:40,076
+Some encodings you will meet in real systems.
+
+224
+00:11:40,400 --> 00:11:41,811
+Binary coded decimal.
+
+225
+00:11:42,091 --> 00:11:44,541
+Four bits, one nibble, per decimal digit.
+
+226
+00:11:44,821 --> 00:11:49,890
+Ninety-eight thousand seven hundred sixty-
+five becomes one-zero-zero-one,
+
+227
+00:11:49,890 --> 00:11:51,945
+one-zero-zero-zero, and so on.
+
+228
+00:11:52,225 --> 00:11:57,066
+In hex it reads nine eight, seven six, five
+F, where F pads the odd nibble.
+
+229
+00:11:57,346 --> 00:11:58,841
+Digits just show up in hex.
+
+230
+00:11:59,121 --> 00:12:05,155
+Half the size of ASCII, and still used in SIM
+cards, SMS and card transactions.
+
+231
+00:12:06,700 --> 00:12:08,790
+TLV: type, length, value.
+
+232
+00:12:09,070 --> 00:12:11,582
+It is ASN.1 you can write on a napkin.
+
+233
+00:12:11,900 --> 00:12:14,039
+The magic is that it is self-describing.
+
+234
+00:12:14,319 --> 00:12:17,600
+A parser that does not know a type can
+skip it using the length.
+
+235
+00:12:17,933 --> 00:12:20,190
+So new fields do not break old readers.
+
+236
+00:12:20,470 --> 00:12:22,101
+That is forward compatibility.
+
+237
+00:12:22,433 --> 00:12:28,695
+TLV is used by TLS extensions, ISO eighty-
+five eighty-three, and protobuf.
+
+238
+00:12:30,233 --> 00:12:32,399
+ASN.1, from nineteen eighty-four.
+
+239
+00:12:32,679 --> 00:12:36,408
+Write the grammar once, and the encoder
+and decoder are generated.
+
+240
+00:12:36,688 --> 00:12:42,544
+It still sits under X five oh nine
+certificates, LDAP, SNMP and the telecom stack.
+
+241
+00:12:42,866 --> 00:12:44,020
+Hex is for reading.
+
+242
+00:12:44,300 --> 00:12:47,923
+Two characters per byte, as in tcpdump -capital X.
+
+243
+00:12:48,266 --> 00:12:54,413
+Base sixty-four is for transport over text-
+only channels: basic auth, JWTs,
+
+244
+00:12:54,413 --> 00:12:56,758
+email attachments, data URIs.
+
+245
+00:12:57,099 --> 00:12:58,833
+It costs thirty-three percent more.
+
+246
+00:12:59,113 --> 00:13:01,024
+Three bytes become four characters.
+
+247
+00:13:01,304 --> 00:13:02,713
+A wrapper, not a design.
+
+248
+00:13:03,633 --> 00:13:06,107
+Finally, RPC and gRPC.
+
+249
+00:13:06,433 --> 00:13:08,962
+RPC is framing plus a function name.
+
+250
+00:13:09,242 --> 00:13:13,215
+First, marshal: turn the function name
+and its arguments into bytes.
+
+251
+00:13:13,533 --> 00:13:14,755
+Then frame and send them.
+
+252
+00:13:15,099 --> 00:13:16,965
+But the network is not a function call.
+
+253
+00:13:17,245 --> 00:13:21,563
+Calls fail halfway, time out with the work
+possibly done, and get retried.
+
+254
+00:13:21,899 --> 00:13:24,561
+Then the server unmarshals and runs the function.
+
+255
+00:13:24,899 --> 00:13:28,270
+gRPC is RPC with protobuf underneath.
+
+256
+00:13:28,550 --> 00:13:33,483
+You write a dot proto schema first, and generate
+client and server code in any language.
+
+257
+00:13:33,833 --> 00:13:37,867
+On the wire it is TLV, so new fields
+do not break old clients.
+
+258
+00:13:38,199 --> 00:13:42,187
+It runs on HTTP two, which is
+binary and multiplexed.
+
+259
+00:13:42,533 --> 00:13:44,929
+The cost is that you cannot read it with curl.
+
+260
+00:13:45,209 --> 00:13:46,984
+Speed bought with debuggability.
+
+261
+00:13:47,264 --> 00:13:49,877
+Faster than JSON, easier than ASN.1.
+
+262
+00:13:50,799 --> 00:13:54,161
+Here is what the quiz is most likely
+to ask from session one.
+
+263
+00:14:14,366 --> 00:14:15,458
+That is session one.
+
+264
+00:14:15,738 --> 00:14:19,281
+Next up, session two: the eagle-eye
+view of the network stack.
+
